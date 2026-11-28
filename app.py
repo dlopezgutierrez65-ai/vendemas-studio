@@ -1,5 +1,6 @@
-from flask import Flask, request, redirect
-import json, os, uuid, datetime
+from flask import Flask, request, redirect, jsonify
+import json, os, uuid, datetime, time
+import urllib.request, urllib.error
 
 app = Flask(__name__)
 FILE = "pedidos.json"
@@ -106,6 +107,37 @@ Los datos introducidos en el formulario o enviados por WhatsApp/email se utiliza
 </details>
 </div>
 </div>
+<style>
+#ia-btn{position:fixed;bottom:76px;right:14px;z-index:100;background:linear-gradient(90deg,#7c3aed,#f97316);color:#fff;border:0;border-radius:999px;padding:12px 16px;font-weight:700;font-size:14px;box-shadow:0 4px 14px rgba(0,0,0,.5)}
+#ia-box{display:none;position:fixed;bottom:130px;right:12px;left:12px;max-width:380px;margin-left:auto;z-index:100;background:#1a1a32;border:1px solid #34345c;border-radius:16px;overflow:hidden}
+#ia-msgs{height:260px;overflow-y:auto;padding:12px;font-size:14px;line-height:1.45}
+.ia-b,.ia-u{padding:8px 11px;border-radius:12px;margin:6px 0;max-width:88%;white-space:pre-wrap}
+.ia-b{background:#232342}
+.ia-u{background:#7c3aed;margin-left:auto}
+#ia-in{display:flex;gap:6px;padding:8px;border-top:1px solid #2a2a48}
+#ia-in input{margin:0;flex:1}
+#ia-in button{background:#f97316;color:#fff;border:0;border-radius:10px;padding:0 14px;font-weight:700}
+</style>
+<button id="ia-btn" type="button" onclick="iaToggle()">💬 Asistente</button>
+<div id="ia-box">
+<div id="ia-msgs"><div class="ia-b">Hola, soy el asistente de VendeMas Studio. Cuéntame qué producto quieres promocionar y te recomiendo un plan.</div></div>
+<div id="ia-in"><input id="ia-txt" placeholder="Escribe aquí..." maxlength="500"><button type="button" onclick="iaSend()">Enviar</button></div>
+</div>
+<script>
+var iaH=[];
+function iaToggle(){var b=document.getElementById("ia-box");b.style.display=(b.style.display==="block")?"none":"block";}
+function iaAdd(t,c){var d=document.createElement("div");d.className=c;d.textContent=t;var m=document.getElementById("ia-msgs");m.appendChild(d);m.scrollTop=m.scrollHeight;}
+async function iaSend(){
+  var i=document.getElementById("ia-txt");var t=i.value.trim();if(!t)return;
+  i.value="";iaAdd(t,"ia-u");iaH.push({role:"user",content:t});
+  try{
+    var r=await fetch("/asistente",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:iaH})});
+    var j=await r.json();var a=j.respuesta||j.error||"Error";
+    iaAdd(a,"ia-b");
+    if(j.respuesta){iaH.push({role:"assistant",content:a});}else{iaH.pop();}
+  }catch(e){iaAdd("No he podido conectar. Escríbenos por WhatsApp.","ia-b");iaH.pop();}
+}
+</script>
 <nav><a href="/">Inicio</a><a href="/crear">Crear</a><a href="/pagar">Pagar</a><a href="/proyectos">Proyectos</a><a href="/admin">Admin</a></nav>
 </div></body></html>
 """
@@ -286,6 +318,67 @@ def admin():
         </div>
         """
     return pagina(h)
+
+
+IA_USO = {}
+IA_DIA = {"d": "", "n": 0}
+SYSTEM_IA = """Eres el asistente de VendeMas Studio, un servicio de diseño de imágenes 3D, despieces técnicos y vídeos cortos para vendedores online, atendido por Daniel desde España.
+Planes: Básico 19 € (1 imagen 3D + 1 formato para Instagram/TikTok); Pro 49 € (3 diseños + despiece esquemático + 1 vídeo de logo); Premium 99 € (creatividades ilimitadas ese mes + vídeo + prioridad; el volumen exacto se confirma por WhatsApp). Precios sujetos al IVA aplicable. Entrega en 24-72 h por WhatsApp o email. Pago por PayPal o Bizum; factura bajo petición. WhatsApp: +34 643 46 44 01.
+Reglas: responde en el idioma del cliente, de forma breve (máximo 4 frases) y amable. Recomienda el plan que mejor encaje según su producto. Las muestras de la galería son ejemplos ilustrativos de estilo, no trabajos hechos para clientes. No prometas resultados de ventas ni plazos distintos. No inventes servicios, precios ni condiciones que no estén aquí: si no lo sabes, dile que escriba por WhatsApp. Para encargar, indícale la página /crear. No pidas datos bancarios ni contraseñas."""
+
+def llamar_ia(msgs):
+    clave = os.environ.get("ANTHROPIC_API_KEY")
+    if not clave:
+        return None, "El asistente aún no está activo. Escríbenos por WhatsApp al +34 643 46 44 01."
+    body = json.dumps({
+        "model": os.environ.get("MODELO_IA", "claude-haiku-5-5"),
+        "max_tokens": 400,
+        "system": SYSTEM_IA,
+        "messages": msgs
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages", data=body,
+        headers={"x-api-key": clave, "anthropic-version": "2023-06-01", "content-type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            d = json.loads(r.read().decode("utf-8"))
+        txt = "".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text")
+        return txt.strip(), None
+    except urllib.error.HTTPError as e:
+        print("IA HTTP error:", e.code, e.read().decode("utf-8", "ignore")[:300])
+    except Exception as e:
+        print("IA error:", repr(e))
+    return None, "Ahora mismo no puedo responder. Escríbenos por WhatsApp al +34 643 46 44 01."
+
+@app.route("/asistente", methods=["POST"])
+def asistente():
+    ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "x").split(",")[0].strip()
+    ahora = time.time()
+    hoy = datetime.date.today().isoformat()
+    if IA_DIA["d"] != hoy:
+        IA_DIA["d"] = hoy
+        IA_DIA["n"] = 0
+    if IA_DIA["n"] >= 300:
+        return jsonify(error="El asistente ha llegado al límite de hoy. Escríbenos por WhatsApp al +34 643 46 44 01."), 429
+    usos = [t for t in IA_USO.get(ip, []) if ahora - t < 3600]
+    if len(usos) >= 15:
+        return jsonify(error="Has hecho muchas preguntas seguidas. Prueba más tarde o escríbenos por WhatsApp."), 429
+    data = request.get_json(silent=True) or {}
+    msgs = []
+    for m in (data.get("messages") or [])[-10:]:
+        if isinstance(m, dict) and m.get("role") in ("user", "assistant") and isinstance(m.get("content"), str):
+            msgs.append({"role": m["role"], "content": m["content"][:500]})
+    while msgs and msgs[0]["role"] != "user":
+        msgs.pop(0)
+    if not msgs or msgs[-1]["role"] != "user":
+        return jsonify(error="Escribe tu pregunta."), 400
+    usos.append(ahora)
+    IA_USO[ip] = usos
+    IA_DIA["n"] += 1
+    txt, err = llamar_ia(msgs)
+    if err:
+        return jsonify(error=err), 503
+    return jsonify(respuesta=txt)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
