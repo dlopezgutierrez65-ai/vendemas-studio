@@ -10,24 +10,30 @@ BIZUM = "624769152"
 
 MUESTRAS = [
     {
-        "titulo": "Render 3D Cosmética Premium",
+        "titulo": "Anuncio Perfume Gold Edition",
         "categoria": "3D",
-        "descripcion": "Iluminación de estudio, reflejos en vidrio y acabado publicitario para redes sociales.",
-        "img": "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=800&q=80"
+        "descripcion": "Ejemplo ilustrativo de estilo: iluminación de estudio y acabado publicitario para redes.",
+        "img": "/static/01-perfume-gold.png"
     },
     {
         "titulo": "Despiece Técnico Smartwatch",
         "categoria": "Despiece",
-        "descripcion": "Vista esquemática por capas para explicar componentes, montaje o calidad del producto.",
-        "img": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=800&q=80"
+        "descripcion": "Ejemplo ilustrativo de estilo: esquema por capas para explicar componentes y calidad.",
+        "img": "/static/02-despiece-smartwatch.png"
     },
     {
-        "titulo": "Promo Vídeo / Escena Visual",
+        "titulo": "Intro Cinemática de Logo",
         "categoria": "Vídeo",
-        "descripcion": "Pieza visual dinámica pensada para captar atención en Reels, TikTok o lanzamientos.",
-        "img": "https://images.unsplash.com/photo-1574717024653-61fd232d4ca4?auto=format&fit=crop&w=800&q=80"
+        "descripcion": "Ejemplo ilustrativo de estilo: intro animada para Reels, TikTok o lanzamientos.",
+        "img": "",
+        "video": "/static/03-intro-logo.mp4"
     }
 ]
+
+def media(m):
+    if m.get("video"):
+        return f'<video class="muestra-img" src="{m["video"]}" controls playsinline preload="metadata"></video>'
+    return f'<img class="muestra-img" src="{m["img"]}" alt="{m["titulo"]}" loading="lazy">'
 
 def cargar():
     if not os.path.exists(FILE):
@@ -119,7 +125,7 @@ def inicio():
 
     <div class="card">
     <h2>Muestras de Trabajos</h2>
-    <div class="sample"><b>Anuncio Perfume Gold Edition</b><p style="margin:4px 0;font-size:13px;color:#aaa">Render 3D fotorrealista con simulación de iluminación para campañas en redes.</p></div>
+    <div class="sample"><b>Anuncio Perfume Gold Edition</b><p style="margin:4px 0;font-size:13px;color:#aaa">Ejemplo ilustrativo de estilo con iluminación de estudio para campañas en redes.</p></div>
     <div class="sample"><b>Despiece Técnico Smartwatch</b><p style="margin:4px 0;font-size:13px;color:#aaa">Esquema visual por capas para mostrar componentes y calidad del producto.</p></div>
     <div class="sample"><b>Intro Cinemática Logo</b><p style="margin:4px 0;font-size:13px;color:#aaa">Pieza visual animada para portadas, lanzamientos y anuncios.</p></div>
     <a class="btn3" href="/proyectos">Ver galería visual y proyectos</a>
@@ -226,7 +232,7 @@ def proyectos():
         h += f"""
         <div class="card muestra-item" data-cat="{m['categoria']}">
           <span class="badge">{m['categoria']}</span>
-          <img class="muestra-img" src="{m['img']}" alt="{m['titulo']}" loading="lazy">
+          {media(m)}
           <h3 style="margin:0 0 6px 0">{m['titulo']}</h3>
           <small>{m['descripcion']}</small>
         </div>
